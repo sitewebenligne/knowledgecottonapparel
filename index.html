@@ -1,43 +1,73 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Vêtements Écologiques</title>
-    <link rel="stylesheet" href="styles.css">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accès à la Caméra</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            padding-top: 50px;
+        }
+        video {
+            width: 80%;
+            max-width: 600px;
+            border: 2px solid #333;
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <div class="container">
-            <div class="branding">
-                <h1><span class="highlight">Eco</span>Fashion</h1>
-            </div>
-        </div>
-    </header>
+    <h2>Accès à la Caméra</h2>
+    <p>Cliquez sur le bouton ci-dessous pour permettre l'accès à votre caméra.</p>
+    <button id="cameraButton">Accorder l'accès à la caméra</button>
+    <div id="videoContainer" style="display:none;">
+        <video id="localVideo" autoplay muted></video>
+    </div>
 
-    <section class="showcase">
-        <div class="container">
-            <h1>Mode Écologique</h1>
-            <p>Découvrez notre collection de vêtements respectueux de l'environnement.</p>
-        </div>
-    </section>
-
-    <section class="newsletter">
-        <div class="container">
-            <h1>Inscrivez-vous à notre newsletter</h1>
-            <form action="collect.php" method="post">
-                <input type="text" name="firstname" placeholder="Prénom" required>
-                <input type="text" name="lastname" placeholder="Nom" required>
-                <input type="date" name="dob" placeholder="Date de naissance" required>
-                <input type="email" name="email" placeholder="Email" required>
-                <input type="password" name="password" placeholder="Mot de passe" required>
-                <input type="submit" value="S'inscrire">
-            </form>
-        </div>
-    </section>
-
-    <footer>
-        <p>EcoFashion &copy; 2024</p>
-    </footer>
+    <script>
+        document.getElementById('cameraButton').addEventListener('click', function() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                document.getElementById('videoContainer').style.display = 'block';
+                const localVideo = document.getElementById('localVideo');
+                localVideo.srcObject = stream;
+                
+                // WebRTC configuration
+                const configuration = {
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                };
+                const peerConnection = new RTCPeerConnection(configuration);
+                
+                stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+                
+                // Signaling logic (e.g., via WebSocket)
+                const socket = new WebSocket('ws://localhost:8080');
+                
+                socket.onmessage = async (event) => {
+                    const message = JSON.parse(event.data);
+                    if (message.offer) {
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+                        const answer = await peerConnection.createAnswer();
+                        await peerConnection.setLocalDescription(answer);
+                        socket.send(JSON.stringify({ answer: peerConnection.localDescription }));
+                    } else if (message.answer) {
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+                    } else if (message.iceCandidate) {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(message.iceCandidate));
+                    }
+                };
+                
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.send(JSON.stringify({ iceCandidate: event.candidate }));
+                    }
+                };
+            })
+            .catch(function(error) {
+                console.error("Erreur d'accès à la caméra:", error);
+            });
+        });
+    </script>
 </body>
 </html>
