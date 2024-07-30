@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Accès à la Caméra et au Micro</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            padding-top: 50px;
+        }
+        video {
+            width: 80%;
+            max-width: 600px;
+            border: 2px solid #333;
+        }
+        button {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Accès à la Caméra et au Micro</h2>
+    <p>Cliquez sur le bouton ci-dessous pour permettre l'accès à votre caméra et micro.</p>
+    <video id="localVideo" autoplay muted></video>
+    <br>
+    <button id="startButton">Commencer à envoyer le flux</button>
+
+    <script>
+        let localStream;
+        const video = document.getElementById('localVideo');
+        const startButton = document.getElementById('startButton');
+
+        startButton.addEventListener('click', () => {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                video.srcObject = stream;
+                localStream = stream;
+                startStreaming();
+            })
+            .catch(error => {
+                console.error("Erreur d'accès à la caméra et au micro:", error);
+            });
+        });
+
+        function startStreaming() {
+            const socket = new WebSocket('wss://votre-signaling-server.herokuapp.com');
+            const peerConnection = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            socket.onopen = () => {
+                console.log('WebSocket connection established');
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                peerConnection.createOffer()
+                    .then(offer => peerConnection.setLocalDescription(offer))
+                    .then(() => socket.send(JSON.stringify({ offer: peerConnection.localDescription })));
+            };
+
+            socket.onmessage = async (event) => {
+                const message = JSON.parse(event.data);
+                if (message.answer) {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+                } else if (message.iceCandidate) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(message.iceCandidate));
+                }
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.send(JSON.stringify({ iceCandidate: event.candidate }));
+                }
+            };
+        }
+    </script>
+</body>
+</html>

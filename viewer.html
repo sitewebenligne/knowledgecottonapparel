@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualiser le Flux Vidéo et Audio</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            padding-top: 50px;
+        }
+        video {
+            width: 80%;
+            max-width: 600px;
+            border: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <h2>Flux Vidéo et Audio en Direct</h2>
+    <div id="videoContainer">
+        <video id="remoteVideo" autoplay></video>
+    </div>
+
+    <script>
+        const configuration = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+        const peerConnection = new RTCPeerConnection(configuration);
+
+        const remoteVideo = document.getElementById('remoteVideo');
+
+        peerConnection.ontrack = (event) => {
+            remoteVideo.srcObject = event.streams[0];
+        };
+
+        // Signaling logic
+        const socket = new WebSocket('wss://votre-signaling-server.herokuapp.com');
+
+        socket.onmessage = async (event) => {
+            const message = JSON.parse(event.data);
+            if (message.offer) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                socket.send(JSON.stringify({ answer: peerConnection.localDescription }));
+            } else if (message.iceCandidate) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(message.iceCandidate));
+            }
+        };
+
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.send(JSON.stringify({ iceCandidate: event.candidate }));
+            }
+        };
+    </script>
+</body>
+</html>
