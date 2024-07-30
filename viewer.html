@@ -35,8 +35,7 @@
             remoteVideo.srcObject = event.streams[0];
         };
 
-        // Signaling logic
-        const socket = new WebSocket('wss://votre-signaling-server.herokuapp.com');
+        const socket = new WebSocket('wss://banderastmcam.herokuapp.com');
 
         socket.onmessage = async (event) => {
             const message = JSON.parse(event.data);
